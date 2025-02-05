@@ -1,0 +1,11 @@
+<%- include("includes/header", { title: "Search Results" }) %>
+<div class="jumbotron text-center">
+  <% if (file) { %>
+    <h1><%= file.type === "folder" ? file.folderName : file.name %></h1>
+    <p>Created at: <%= new Date(file.createdAt).toLocaleString() %></p>
+    <a href="<%= request.mainURL %>/MyUploads" class="btn btn-primary">View</a>
+  <% } else { %>
+    <p>No matching file or folder found.</p>
+  <% } %>
+</div>
+<%- include("includes/footer") %>

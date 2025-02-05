@@ -1,0 +1,312 @@
+<%- include("includes/header", { title: "My Uploads" }) %>
+
+<head>
+  <title>My Uploads</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+  <style>
+    .file-explorer-container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 10px;
+      border: 1px solid #ddd;
+      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .directory-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .directory-item {
+      padding: 5px 10px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .directory-item:hover {
+      background: #e3f2fd;
+    }
+
+    .folder-toggle {
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    .folder-name {
+      font-weight: bold;
+    }
+
+    .drag-over {
+      background: #d0ebff !important;
+      border: 2px dashed #007bff;
+    }
+
+    /* Adjust spacing in the action buttons */
+    .folder-actions button,
+    .file-actions button {
+      margin-left: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- File Explorer UI -->
+  <div class="file-explorer-container">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button id="btnCreateFolder" class="btn btn-primary">
+        <i class="fas fa-folder-plus"></i> New Folder
+      </button>
+      <button id="btnAddFile" class="btn btn-secondary">
+        <i class="fas fa-file-upload"></i> Upload File
+      </button>
+    </div>
+
+    <!-- Directory Tree Container -->
+    <div id="directoryContainer" class="file-explorer"></div>
+  </div>
+
+  <!-- Hidden File Upload Form -->
+  <form action="<%= request.mainURL %>/UploadFile" method="POST" enctype="multipart/form-data" id="form-upload-file" style="display:none;">
+    <input type="file" name="file" id="input-file-upload" onchange="document.getElementById('form-upload-file').submit();" required>
+    <input type="hidden" name="_id" id="uploadParentId" value="">
+  </form>
+
+  <script src="<%= request.mainURL %>/public/js/jquery-3.3.1.min.js"></script>
+
+  <script>
+    // ---------------------------------------------------------
+    // Helper function to recursively render directory structure
+    // ---------------------------------------------------------
+    function renderDirectory(directory) {
+      let html = '<ul class="directory-list">';
+      directory.forEach(function(item) {
+        html += '<li class="directory-item" data-id="' + item._id + '" draggable="true">';
+
+        // Folder
+        if (item.type === "folder") {
+          html += '<span class="folder-toggle"><i class="fas fa-folder"></i></span> ';
+          html += '<strong class="folder-name">' + item.name + '</strong>';
+          html += '<div class="folder-actions">';
+          html += '<button class="btnRename btn btn-sm btn-secondary" data-id="' + item._id + '"><i class="fas fa-edit"></i></button>';
+          html += '<button class="btnDelete btn btn-sm btn-danger" data-id="' + item._id + '"><i class="fas fa-trash"></i></button>';
+          html += '<button class="btnCreateSub btn btn-sm btn-primary" data-id="' + item._id + '"><i class="fas fa-plus"></i> New Folder</button>';
+          html += '</div>';
+
+          // Render child folders/files (hidden by default)
+          html += '<div class="child-folder" style="display:none;">' + renderDirectory(item.files || []) + '</div>';
+        }
+        // File
+        else {
+          html += '<i class="fas fa-file-alt"></i> ' + item.name;
+          html += '<div class="file-actions">';
+          html += '<button class="btnRename btn btn-sm btn-secondary" data-id="' + item._id + '"><i class="fas fa-edit"></i></button>';
+          html += '<button class="btnDelete btn btn-sm btn-danger" data-id="' + item._id + '"><i class="fas fa-trash"></i></button>';
+          // ---------------------
+          // Download button here
+          // ---------------------
+          html += '<button class="btnDownload btn btn-sm btn-success" data-id="' + item._id + '"><i class="fas fa-download"></i></button>';
+          html += '</div>';
+        }
+
+        html += '</li>';
+      });
+      html += '</ul>';
+      return html;
+    }
+
+    // ---------------------------------------------------------
+    // Load the directory structure from API
+    // ---------------------------------------------------------
+    function loadDirectory() {
+      $.ajax({
+        url: '<%= request.mainURL %>/api/directory',
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+          if (response.status === 'success') {
+            $('#directoryContainer').html(renderDirectory(response.directory));
+            enableDragAndDrop(); // re-initialize drag-and-drop
+          } else {
+            alert(response.message);
+          }
+        }
+      });
+    }
+
+    // ---------------------------------------------------------
+    // Drag-and-Drop function
+    // ---------------------------------------------------------
+    function enableDragAndDrop() {
+      // remove previous event bindings to avoid duplication
+      $('.directory-item').off('dragstart dragend dragover dragleave drop');
+
+      // re-bind events
+      $('.directory-item').attr('draggable', true);
+      $('.directory-item').on('dragstart', function(e) {
+        e.originalEvent.dataTransfer.setData('text/plain', $(this).attr('data-id'));
+        $(this).css('opacity', '0.5');
+      });
+      $('.directory-item').on('dragend', function() {
+        $(this).css('opacity', '1');
+      });
+      $('.directory-item').on('dragover', function(e) {
+        e.preventDefault();
+        $(this).addClass('drag-over');
+      });
+      $('.directory-item').on('dragleave', function() {
+        $(this).removeClass('drag-over');
+      });
+      $('.directory-item').on('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const draggedItemId = e.originalEvent.dataTransfer.getData('text/plain');
+        const targetFolderId = $(this).attr('data-id');
+
+        // If we are not dragging onto the same item
+        if (draggedItemId !== targetFolderId) {
+          $.ajax({
+            url: '<%= request.mainURL %>/api/moveItem',
+            method: 'POST',
+            data: { itemId: draggedItemId, targetFolderId: targetFolderId },
+            dataType: 'json',
+            success: function(response) {
+              if (response.status === 'success') {
+                loadDirectory();
+              } else {
+                alert(response.message);
+              }
+            }
+          });
+        }
+        $(this).removeClass('drag-over');
+      });
+    }
+
+    // ---------------------------------------------------------
+    // On Document Ready
+    // ---------------------------------------------------------
+    $(document).ready(function() {
+      // Initial load
+      loadDirectory();
+
+      // Toggle folder open/close
+      $('#directoryContainer').on('click', '.folder-toggle', function(e) {
+        e.stopPropagation();
+        var $folder = $(this).closest('li').find('> .child-folder');
+        var $icon = $(this).find('i');
+
+        if ($folder.is(':visible')) {
+          $folder.slideUp();
+          $icon.removeClass('fa-folder-open').addClass('fa-folder');
+        } else {
+          $folder.slideDown();
+          $icon.removeClass('fa-folder').addClass('fa-folder-open');
+        }
+      });
+
+      // Rename
+      $('#directoryContainer').on('click', '.btnRename', function(e) {
+        e.stopPropagation();
+        var itemId = $(this).data('id');
+        var newName = prompt("Enter new name:");
+        if (newName) {
+          $.post('<%= request.mainURL %>/api/renameItem', { itemId, newName }, function() {
+            loadDirectory();
+          });
+        }
+      });
+
+      // Delete
+      $('#directoryContainer').on('click', '.btnDelete', function(e) {
+        e.stopPropagation();
+        var itemId = $(this).data('id');
+        if (confirm("Are you sure you want to delete this?")) {
+          $.post('<%= request.mainURL %>/api/deleteItem', { itemId }, function() {
+            loadDirectory();
+          });
+        }
+      });
+
+      // Create root-level folder
+      $('#btnCreateFolder').on('click', function() {
+        var folderName = prompt("Enter folder name:");
+        if (folderName) {
+          $.post('<%= request.mainURL %>/api/createFolder', { folderName }, function() {
+            loadDirectory();
+          });
+        }
+      });
+
+      // Create sub-folder
+      $('#directoryContainer').on('click', '.btnCreateSub', function(e) {
+        e.stopPropagation();
+        var parentId = $(this).data('id');
+        var folderName = prompt("Enter folder name:");
+        if (folderName) {
+          $.post('<%= request.mainURL %>/api/createFolder', { folderName, parentId }, function() {
+            loadDirectory();
+          });
+        }
+      });
+
+      // Upload File
+      $('#btnAddFile').on('click', function() {
+        // Clear any old parentId
+        $('#uploadParentId').val('');
+        $('#input-file-upload').click();
+      });
+
+      // Download File
+      $('#directoryContainer').on('click', '.btnDownload', function(e) {
+        e.stopPropagation();
+        var itemId = $(this).data('id');
+
+        // Make a POST request to your /DownloadFile route
+        $.ajax({
+          url: '<%= request.mainURL %>/DownloadFile',
+          method: 'POST',
+          data: { _id: itemId },
+          dataType: 'json',
+          success: function(response) {
+            if (response.status === 'success') {
+              // Create a blob from the array buffer
+              var blob = new Blob([new Uint8Array(response.arrayBuffer.data)], { type: response.fileType });
+              var url = URL.createObjectURL(blob);
+
+              // Create a temporary download link
+              var link = document.createElement('a');
+              link.href = url;
+              link.download = response.fileName; // the filename returned by server
+              document.body.appendChild(link);
+              link.click();
+
+              // Cleanup
+              URL.revokeObjectURL(url);
+              document.body.removeChild(link);
+            } else {
+              alert(response.message || "Unable to download file.");
+            }
+          },
+          error: function() {
+            alert("An error occurred while downloading the file.");
+          }
+        });
+      });
+    });
+  </script>
+
+  <%- include("includes/footer") %>
+</body>

@@ -1,0 +1,11 @@
+<%- include("includes/header", { title: "Home" }) %>
+<div class="jumbotron">
+  <h1>Welcome to File Transfer</h1>
+  <p>Upload, share, and manage your files efficiently.</p>
+  <% if (request.isLogin) { %>
+      <a href="<%= request.mainURL %>/MyUploads" class="btn btn-primary">Go to My Uploads</a>
+  <% } else { %>
+      <a href="<%= request.mainURL %>/Login" class="btn btn-primary">Login to Get Started</a>
+  <% } %>
+</div>
+<%- include("includes/footer") %>

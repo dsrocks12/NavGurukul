@@ -1,0 +1,42 @@
+<%- include("includes/header", { title: "Shared File" }) %>
+<div class="jumbotron text-center">
+  <% if (link) { %>
+    <h1><%= link.file.name %></h1>
+    <button class="btn btn-success" onclick="downloadFile(this);" data-id="<%= link.file._id %>">Download</button>
+  <% } else { %>
+    <p>Invalid or expired link.</p>
+  <% } %>
+</div>
+<script>
+function downloadFile(button) {
+  var fileId = button.getAttribute("data-id");
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", "<%= request.mainURL %>/DownloadFile", true);
+  xhr.onreadystatechange = function() {
+    if(xhr.readyState === 4 && xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText);
+      if(data.status === "success") {
+        var binary = '';
+        var bytes = new Uint8Array(data.arrayBuffer.data);
+        for (var i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        var base64 = window.btoa(binary);
+        base64 = "data:" + data.fileType + ";base64," + base64;
+        var link = document.createElement('a');
+        link.href = base64;
+        link.download = data.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        alert(data.message);
+      }
+    }
+  };
+  var formData = new FormData();
+  formData.append("_id", fileId);
+  xhr.send(formData);
+}
+</script>
+<%- include("includes/footer") %>

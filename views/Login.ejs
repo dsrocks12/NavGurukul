@@ -1,0 +1,17 @@
+<%- include("includes/header", { title: "Login" }) %>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <form action="<%= request.mainURL %>/Login" method="POST">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" placeholder="Enter email" name="email" class="form-control" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" placeholder="Enter password" name="password" class="form-control" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+  </div>
+</div>
+<%- include("includes/footer") %>
